@@ -17,6 +17,6 @@ public class ShortenRequest {
 
     // Optional: number of days until the link expires. Null/omitted = never expires.
     @Positive
-    @Max(3650)
+    @Max(365)
     private Integer expiresInDays;
 }
