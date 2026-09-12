@@ -89,9 +89,58 @@ curl http://localhost:8080/api/urls/1/analytics
 
 ## Testing
 
+
 ```bash
 mvn test
 ```
+OR
+### cmd 
+```aiignore
+
+ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+ 
+ .\test.ps1
+```
+
+OUTPUT:-
+```aiignore
+[1] Create a short link
+  PASS: POST /api/urls returns 201 (got 201)
+  Got shortCode: 1
+
+[2] Reject an invalid longUrl
+  PASS: POST with bad longUrl returns 400 (got 400)
+
+[3] Follow the short link
+  PASS: GET /1 returns 302 (got 302)
+  PASS: redirects to the original URL (https://www.autodesk.com/products/fusion-360)
+
+[4] Check analytics
+  PASS: GET analytics returns 200 (got 200)
+  Response: {"shortCode":"1","totalClicks":1,"clicksByDay":[{"date":"2026-09-12","count":1}],"clicksByReferrer":[{"referrer":"direct","count":1}]}
+
+[5] Look up a nonexistent short code
+  PASS: GET /zzzzzzz returns 404 (got 404)
+
+[6] Rate limit test (default: 10 requests/minute/client)
+  request #1 -> 201
+  request #2 -> 201
+  request #3 -> 201
+  request #4 -> 201
+  request #5 -> 201
+  request #6 -> 201
+  request #7 -> 201
+  request #8 -> 201
+  request #9 -> 429
+  request #10 -> 429
+  request #11 -> 429
+  request #12 -> 429
+  PASS: rate limiter kicked in (got a 429) 
+
+=== Summary: 8 passed, 0 failed ===
+
+```
+
 Covers the base62 codec round-trip and the rate limiter's window/expiry logic
 (via a mocked Redis template — no live Redis needed to run the test suite).
 
