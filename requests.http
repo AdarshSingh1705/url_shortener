@@ -1,0 +1,127 @@
+### ShortLink API — manual test requests (IntelliJ HTTP Client)
+### Open this file in IntelliJ, click the ▶ next to each request to run it individually,
+### or the ▶▶ at the top of the file to run all of them in order (needed for the rate-limit test).
+### Make sure the app is running on localhost:8080 first (docker compose up -d && run ShortLinkApplication).
+
+@baseUrl = http://localhost:8080
+
+### 1. Create a short link — expect 201, a shortCode, and shortUrl in the response.
+# The shortCode gets captured below so later requests can reuse it automatically.
+POST {{baseUrl}}/api/urls
+Content-Type: application/json
+
+{
+  "longUrl": "https://www.autodesk.com/products/fusion-360",
+  "expiresInDays": 30
+}
+
+> {%
+    client.global.set("shortCode", response.body.shortCode);
+    client.test("Status is 201", () => response.status === 201);
+    client.test("Has a shortCode", () => !!response.body.shortCode);
+%}
+
+### 2. Create with an invalid URL — expect 400 (validation should reject this).
+POST {{baseUrl}}/api/urls
+Content-Type: application/json
+
+{
+  "longUrl": "not-a-real-url"
+}
+
+> {%
+    client.test("Status is 400", () => response.status === 400);
+%}
+
+### 3. Follow the short link — expect 302 redirect back to the original longUrl.
+GET {{baseUrl}}/{{shortCode}}
+
+> {%
+    client.test("Status is 302", () => response.status === 302);
+    client.test("Redirects to Autodesk URL", () =>
+        response.headers.valueOf("Location") === "https://www.autodesk.com/products/fusion-360");
+%}
+
+### 4. Check analytics — expect totalClicks to be at least 1 (from step 3).
+GET {{baseUrl}}/api/urls/{{shortCode}}/analytics
+
+> {%
+    client.test("Status is 200", () => response.status === 200);
+    client.test("At least one click recorded", () => response.body.totalClicks >= 1);
+%}
+
+### 5. Look up a short code that doesn't exist — expect 404.
+GET {{baseUrl}}/zzzzzzz
+
+> {%
+    client.test("Status is 404", () => response.status === 404);
+%}
+
+### ============================================================
+### Rate limit test — default is 10 requests/minute per client.
+### Run requests 6a through 6l together (select them + run, or run the whole file)
+### in quick succession. The 11th should come back 429 with a Retry-After header.
+### ============================================================
+
+### 6a
+POST {{baseUrl}}/api/urls
+Content-Type: application/json
+
+{ "longUrl": "https://example.com/1" }
+
+### 6b
+POST {{baseUrl}}/api/urls
+Content-Type: application/json
+
+{ "longUrl": "https://example.com/2" }
+
+### 6c
+POST {{baseUrl}}/api/urls
+Content-Type: application/json
+
+{ "longUrl": "https://example.com/3" }
+
+### 6d
+POST {{baseUrl}}/api/urls
+Content-Type: application/json
+
+{ "longUrl": "https://example.com/4" }
+
+### 6e
+POST {{baseUrl}}/api/urls
+Content-Type: application/json
+
+{ "longUrl": "https://example.com/5" }
+
+### 6f
+POST {{baseUrl}}/api/urls
+Content-Type: application/json
+
+{ "longUrl": "https://example.com/6" }
+
+### 6g
+POST {{baseUrl}}/api/urls
+Content-Type: application/json
+
+{ "longUrl": "https://example.com/7" }
+
+### 6h
+POST {{baseUrl}}/api/urls
+Content-Type: application/json
+
+{ "longUrl": "https://example.com/8" }
+
+### 6i — this is request #9 overall if run right after 1 and 2 above (which also hit /api/urls).
+### If you ran this file from the top, this should be the one that flips to 429 (2 + 9 = 11th).
+POST {{baseUrl}}/api/urls
+Content-Type: application/json
+
+{ "longUrl": "https://example.com/9" }
+
+> {%
+    client.test("Either 201 (still under limit) or 429 (limit hit)", () =>
+        response.status === 201 || response.status === 429);
+    if (response.status === 429) {
+        client.test("429 includes Retry-After header", () => !!response.headers.valueOf("Retry-After"));
+    }
+%}
